@@ -376,7 +376,7 @@ function GameCanvas() {
   }
 
   return (
-    <section className="game-container" aria-live="polite">
+    <section className="game-container w-3/4" aria-live="polite">
       <div
         className="game-stage"
         ref={objCanvasContainerRef}

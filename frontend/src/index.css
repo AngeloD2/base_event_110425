@@ -3,6 +3,9 @@
  * Module: Global Styles
  * Purpose: Provide baseline styling for the application document
  */
+
+ @import "tailwindcss";
+ 
 :root {
   font-family: 'Segoe UI', 'Roboto', sans-serif;
   background-color: #161616;
