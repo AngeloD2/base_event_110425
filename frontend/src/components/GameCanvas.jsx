@@ -39,9 +39,9 @@ function GameCanvas() {
   const [blnShowCharacterSelection, setBlnShowCharacterSelection] = useState(true);
 
   const arrCharacters = [
-    { name: 'Blue', url: 'cat-blue.png' },
-    { name: 'Orange', url: 'cat-orange.png' },
-    { name: 'Purple', url: 'cat-purple.png' },
+    { name: 'Blue', url: '/cat-blue.png' },
+    { name: 'Orange', url: '/cat-orange.png' },
+    { name: 'Purple', url: '/cat-purple.png' },
   ];
 
   const objControlsResult = useKeyboardControls()
