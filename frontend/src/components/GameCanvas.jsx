@@ -104,7 +104,8 @@ function GameCanvas() {
 
         // Add background and audio asset bundles
         Assets.addBundle('background', [
-          { alias: 'background', src: BACKGROUND_IMAGE_PATH }
+          { alias: 'background', src: BACKGROUND_IMAGE_PATH },
+          { alias: 'platform', src: 'platform.png' }
         ])
 
         Assets.addBundle('audio', [
