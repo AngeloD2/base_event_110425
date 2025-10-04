@@ -1,0 +1,35 @@
+/**
+ * System: Base Event Platformer
+ * Module: Application Styles
+ * Purpose: Style the layout for the platformer shell and PixiJS canvas wrapper
+ */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  min-height: 100vh;
+}
+
+.app-title {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  color: #f5ebe0;
+  letter-spacing: 0.04em;
+}
+
+.app-description {
+  margin: 0;
+  color: #d6ccc2;
+  font-size: 1rem;
+}
+
+.game-container {
+  border-radius: 12px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.game-container canvas {
+  display: block;
+}
