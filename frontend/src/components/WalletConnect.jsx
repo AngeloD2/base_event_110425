@@ -31,14 +31,14 @@ const WalletConnect = () => {
   }
 
   return (
-    <div className="w-3/5 max-w-md bg-white p-4 rounded-lg text-black">
+    <div className="max-w-md bg-white p-4 rounded-lg text-black">
       <div>
-        <span className="text-center">🚀 Web3 Gaming Wallet</span>
+        <span className="text-center text-sm">🚀 Web3 Gaming Wallet</span>
       </div>
       <div className="space-y-4">
         {!authenticated ? (
           <div className="text-center space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-xs text-gray-600">
               Connect your wallet to save your high scores on-chain and compete with other players!
             </p>
             <button onClick={login} className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
