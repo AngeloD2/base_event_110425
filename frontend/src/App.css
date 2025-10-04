@@ -1,0 +1,143 @@
+/**
+ * System: Base Event Platformer
+ * Module: Application Styles
+ * Purpose: Style the layout for the platformer shell, PixiJS canvas wrapper, and UI overlays
+ */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  min-height: 100vh;
+}
+
+.app-title {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  color: #f5ebe0;
+  letter-spacing: 0.04em;
+}
+
+.app-description {
+  margin: 0;
+  color: #d6ccc2;
+  font-size: 1rem;
+}
+
+.game-container {
+  position: relative;
+  border-radius: 12px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.game-stage {
+  width: fit-content;
+}
+
+.game-stage canvas {
+  display: block;
+}
+
+.game-overlay {
+  position: absolute;
+  top: 0.75rem;
+  left: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 600;
+  color: #f8edeb;
+  text-shadow: 0 3px 8px rgba(0, 0, 0, 0.6);
+}
+
+.game-score {
+  font-size: 1rem;
+  pointer-events: none;
+}
+
+.game-warning {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #ffd166;
+}
+
+.game-error {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #ef476f;
+}
+
+.game-button {
+  pointer-events: auto;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 6px;
+  background-color: #118ab2;
+  color: #f5ebe0;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.game-button:hover {
+  background-color: #0f6f94;
+}
+
+.game-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(13, 25, 43, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.game-modal {
+  width: min(420px, 100%);
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: rgba(9, 14, 23, 0.92);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  text-align: center;
+  color: #f8edeb;
+}
+
+.game-over-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+}
+
+.game-over-score {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  color: #ffd166;
+}
+
+.game-info-message {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  color: #b9fbc0;
+}
+
+.game-action-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.game-button-primary {
+  background-color: #ef476f;
+}
+
+.game-button-primary:hover {
+  background-color: #ce3a5d;
+}
+
+.game-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
