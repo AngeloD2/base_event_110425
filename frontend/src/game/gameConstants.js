@@ -19,6 +19,10 @@ export const PLATFORM_HEIGHT = 18
 export const PLATFORM_WIDTH_MIN = 96
 export const PLATFORM_WIDTH_MAX = 168
 export const PLATFORM_RECYCLE_BUFFER = 40
+export const PLATFORM_VANISH_TIME_BASE = 3.5
+export const PLATFORM_VANISH_TIME_MIN = 1.2
+export const PLATFORM_VANISH_TIME_SCORE_FACTOR = 0.0004
+
 export const PLAYER_START_OFFSET_Y = 560
 export const PLAYER_COLOR = 0xffe066
 export const PLATFORM_COLOR = 0x415a77

@@ -83,3 +83,61 @@
 .game-button:hover {
   background-color: #0f6f94;
 }
+
+.game-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(13, 25, 43, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.game-modal {
+  width: min(420px, 100%);
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: rgba(9, 14, 23, 0.92);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  text-align: center;
+  color: #f8edeb;
+}
+
+.game-over-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+}
+
+.game-over-score {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  color: #ffd166;
+}
+
+.game-info-message {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  color: #b9fbc0;
+}
+
+.game-action-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.game-button-primary {
+  background-color: #ef476f;
+}
+
+.game-button-primary:hover {
+  background-color: #ce3a5d;
+}
+
+.game-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}

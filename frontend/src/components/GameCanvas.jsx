@@ -13,7 +13,9 @@ import {
 } from '../game/gameConstants.js'
 import useKeyboardControls from '../hooks/useKeyboardControls.js'
 
-const objDefaultControls = { blnMovingLeft: false, blnMovingRight: false }
+const STR_SAVE_PENDING_MESSAGE = 'Blockchain save queued. Integration pending.'
+const STR_SAVE_ERROR_MESSAGE = 'Unable to queue blockchain save.'
+const objDefaultControls = { blnMovingLeft: false, blnMovingRight: false, blnJumpActive: false }
 
 function GameCanvas() {
   const objCanvasContainerRef = useRef(null)
@@ -21,10 +23,13 @@ function GameCanvas() {
   const objEngineRef = useRef(null)
   const objControlSnapshotRef = useRef(objDefaultControls)
   const objControlsStatusRef = useRef({ success: false, error: 'Pending' })
+  const objPointerJumpRef = useRef(false)
 
   const [intScore, setIntScore] = useState(0)
   const [blnGameOver, setBlnGameOver] = useState(false)
   const [strErrorMessage, setStrErrorMessage] = useState('')
+  const [blnSaveInProgress, setBlnSaveInProgress] = useState(false)
+  const [strSaveStatusMessage, setStrSaveStatusMessage] = useState('')
 
   const objControlsResult = useKeyboardControls()
 
@@ -35,15 +40,51 @@ function GameCanvas() {
 
   const fncGetControlState = useCallback(() => {
     if (objControlsStatusRef.current.success) {
-      return objControlSnapshotRef.current
+      const objControlState = objControlSnapshotRef.current
+
+      return {
+        blnMovingLeft: objControlState.blnMovingLeft,
+        blnMovingRight: objControlState.blnMovingRight,
+        blnJumpActive: objControlState.blnJumpActive || objPointerJumpRef.current,
+      }
     }
 
-    return objDefaultControls
+    return {
+      blnMovingLeft: objDefaultControls.blnMovingLeft,
+      blnMovingRight: objDefaultControls.blnMovingRight,
+      blnJumpActive: objPointerJumpRef.current,
+    }
+  }, [])
+
+  const fncHandleGameOver = useCallback(() => {
+    setBlnGameOver(true)
+    setBlnSaveInProgress(false)
+    setStrSaveStatusMessage('')
+    objPointerJumpRef.current = false
   }, [])
 
   useEffect(() => {
     let blnIsCancelled = false
     const objCanvasContainerElement = objCanvasContainerRef.current
+
+    const fncHandlePointerDown = (objEvent) => {
+      if (objEvent.pointerType === 'mouse' && objEvent.button !== 0) {
+        return
+      }
+
+      objPointerJumpRef.current = true
+    }
+
+    const fncHandlePointerRelease = () => {
+      objPointerJumpRef.current = false
+    }
+
+    if (objCanvasContainerElement) {
+      objCanvasContainerElement.addEventListener('pointerdown', fncHandlePointerDown)
+      objCanvasContainerElement.addEventListener('pointerup', fncHandlePointerRelease)
+      objCanvasContainerElement.addEventListener('pointercancel', fncHandlePointerRelease)
+      objCanvasContainerElement.addEventListener('pointerleave', fncHandlePointerRelease)
+    }
 
     async function fncInitialize() {
       try {
@@ -75,7 +116,7 @@ function GameCanvas() {
           objApplication: objInitializedApplication,
           fncGetControlState,
           fncOnScoreUpdate: (intNewScore) => setIntScore(intNewScore),
-          fncOnGameOver: () => setBlnGameOver(true),
+          fncOnGameOver: fncHandleGameOver,
         })
 
         if (!objEngineResult.success) {
@@ -115,6 +156,8 @@ function GameCanvas() {
       blnIsCancelled = true
       setBlnGameOver(false)
       setIntScore(0)
+      setBlnSaveInProgress(false)
+      setStrSaveStatusMessage('')
 
       if (objEngineRef.current) {
         objEngineRef.current.stop()
@@ -128,9 +171,15 @@ function GameCanvas() {
 
       if (objCanvasContainerElement) {
         objCanvasContainerElement.innerHTML = ''
+        objCanvasContainerElement.removeEventListener('pointerdown', fncHandlePointerDown)
+        objCanvasContainerElement.removeEventListener('pointerup', fncHandlePointerRelease)
+        objCanvasContainerElement.removeEventListener('pointercancel', fncHandlePointerRelease)
+        objCanvasContainerElement.removeEventListener('pointerleave', fncHandlePointerRelease)
       }
+
+      objPointerJumpRef.current = false
     }
-  }, [fncGetControlState])
+  }, [fncGetControlState, fncHandleGameOver])
 
   const blnControlsUnavailable = !objControlsStatusRef.current.success
 
@@ -155,6 +204,39 @@ function GameCanvas() {
     setBlnGameOver(false)
     setStrErrorMessage('')
     setIntScore(0)
+    setBlnSaveInProgress(false)
+    setStrSaveStatusMessage('')
+  }
+
+  const fncHandleSaveToBlockchain = () => {
+    if (blnSaveInProgress) {
+      return
+    }
+
+    if (!objEngineRef.current) {
+      setStrSaveStatusMessage(STR_SAVE_ERROR_MESSAGE)
+      return
+    }
+
+    setBlnSaveInProgress(true)
+
+    try {
+      const intFinalScore = objEngineRef.current.getScore
+        ? objEngineRef.current.getScore()
+        : intScore
+
+      console.info('Blockchain save placeholder invoked', {
+        stage: 'pendingIntegration',
+        score: intFinalScore,
+      })
+
+      setStrSaveStatusMessage(STR_SAVE_PENDING_MESSAGE + ' Score: ' + intFinalScore + '.')
+    } catch (objError) {
+      console.error('Failed to queue blockchain save placeholder', objError)
+      setStrSaveStatusMessage(STR_SAVE_ERROR_MESSAGE)
+    } finally {
+      setBlnSaveInProgress(false)
+    }
   }
 
   return (
@@ -173,12 +255,40 @@ function GameCanvas() {
           <p className="game-warning">Keyboard controls are unavailable in this environment.</p>
         )}
         {strErrorMessage && <p className="game-error">{strErrorMessage}</p>}
-        {blnGameOver && (
-          <button type="button" className="game-button" onClick={fncHandleRestart}>
-            Restart
-          </button>
-        )}
       </div>
+      {blnGameOver && (
+        <div
+          className="game-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="game-over-heading"
+        >
+          <div className="game-modal">
+            <h2 id="game-over-heading" className="game-over-title">
+              Game Over
+            </h2>
+            <p className="game-over-score" aria-live="polite">
+              Final score: {intScore}
+            </p>
+            {strSaveStatusMessage && (
+              <p className="game-info-message">{strSaveStatusMessage}</p>
+            )}
+            <div className="game-action-row">
+              <button
+                type="button"
+                className="game-button game-button-primary"
+                onClick={fncHandleSaveToBlockchain}
+                disabled={blnSaveInProgress}
+              >
+                {blnSaveInProgress ? 'Saving...' : 'Save to blockchain'}
+              </button>
+              <button type="button" className="game-button" onClick={fncHandleRestart}>
+                Restart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

@@ -30,10 +30,17 @@ export function updatePlatformSprite(objPlatformGraphic, objPlatformState) {
     return { success: false, error: 'PlatformSpriteUpdateInvalid' }
   }
 
+  const blnIsActive = objPlatformState.blnActive !== false
+
   objPlatformGraphic.clear()
-  objPlatformGraphic.beginFill(PLATFORM_COLOR)
-  objPlatformGraphic.drawRoundedRect(0, 0, objPlatformState.dblWidth, PLATFORM_HEIGHT, 6)
-  objPlatformGraphic.endFill()
+  objPlatformGraphic.visible = blnIsActive
+
+  if (blnIsActive) {
+    objPlatformGraphic.beginFill(PLATFORM_COLOR)
+    objPlatformGraphic.drawRoundedRect(0, 0, objPlatformState.dblWidth, PLATFORM_HEIGHT, 6)
+    objPlatformGraphic.endFill()
+  }
+
   objPlatformGraphic.x = objPlatformState.dblPositionX
   objPlatformGraphic.y = objPlatformState.dblPositionY
 

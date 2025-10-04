@@ -7,12 +7,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 const arrLeftKeyCodes = ['ArrowLeft', 'KeyA']
 const arrRightKeyCodes = ['ArrowRight', 'KeyD']
+const arrJumpKeyCodes = ['Space', 'ArrowUp', 'KeyW']
 
 export default function useKeyboardControls() {
   const blnHasWindow = typeof window !== 'undefined' && typeof window.addEventListener === 'function'
   const [objControlState, setObjControlState] = useState({
     blnMovingLeft: false,
     blnMovingRight: false,
+    blnJumpActive: false,
   })
   const objPressedKeysRef = useRef(new Set())
 
@@ -23,15 +25,16 @@ export default function useKeyboardControls() {
 
     const objPressedKeys = objPressedKeysRef.current
 
-    const fncHandleKeyDown = (objEvent) => {
-      objPressedKeys.add(objEvent.code)
+    const fncSynchronizeControlState = () => {
       const blnMovingLeft = arrLeftKeyCodes.some((strCode) => objPressedKeys.has(strCode))
       const blnMovingRight = arrRightKeyCodes.some((strCode) => objPressedKeys.has(strCode))
+      const blnJumpActive = arrJumpKeyCodes.some((strCode) => objPressedKeys.has(strCode))
 
       setObjControlState((objPrevious) => {
         if (
           objPrevious.blnMovingLeft === blnMovingLeft &&
-          objPrevious.blnMovingRight === blnMovingRight
+          objPrevious.blnMovingRight === blnMovingRight &&
+          objPrevious.blnJumpActive === blnJumpActive
         ) {
           return objPrevious
         }
@@ -39,28 +42,19 @@ export default function useKeyboardControls() {
         return {
           blnMovingLeft,
           blnMovingRight,
+          blnJumpActive,
         }
       })
     }
 
+    const fncHandleKeyDown = (objEvent) => {
+      objPressedKeys.add(objEvent.code)
+      fncSynchronizeControlState()
+    }
+
     const fncHandleKeyUp = (objEvent) => {
       objPressedKeys.delete(objEvent.code)
-      const blnMovingLeft = arrLeftKeyCodes.some((strCode) => objPressedKeys.has(strCode))
-      const blnMovingRight = arrRightKeyCodes.some((strCode) => objPressedKeys.has(strCode))
-
-      setObjControlState((objPrevious) => {
-        if (
-          objPrevious.blnMovingLeft === blnMovingLeft &&
-          objPrevious.blnMovingRight === blnMovingRight
-        ) {
-          return objPrevious
-        }
-
-        return {
-          blnMovingLeft,
-          blnMovingRight,
-        }
-      })
+      fncSynchronizeControlState()
     }
 
     window.addEventListener('keydown', fncHandleKeyDown)
@@ -70,7 +64,7 @@ export default function useKeyboardControls() {
       window.removeEventListener('keydown', fncHandleKeyDown)
       window.removeEventListener('keyup', fncHandleKeyUp)
       objPressedKeys.clear()
-      setObjControlState({ blnMovingLeft: false, blnMovingRight: false })
+      setObjControlState({ blnMovingLeft: false, blnMovingRight: false, blnJumpActive: false })
     }
   }, [blnHasWindow])
 

@@ -23,6 +23,9 @@ import {
   PLATFORM_WIDTH_MIN,
   PLATFORM_WIDTH_MAX,
   PLATFORM_RECYCLE_BUFFER,
+  PLATFORM_VANISH_TIME_BASE,
+  PLATFORM_VANISH_TIME_MIN,
+  PLATFORM_VANISH_TIME_SCORE_FACTOR,
   PLAYER_START_OFFSET_Y,
   SCORE_PER_PIXEL,
   GAME_OVER_OFFSET,
@@ -54,12 +57,15 @@ export function createGameEngine({
   let blnGameOver = false
   let dblHighestAltitude = PLAYER_START_OFFSET_Y
   let intScore = 0
+  const objFallbackControls = { blnMovingLeft: false, blnMovingRight: false, blnJumpActive: false }
   const fncUpdateFrame = () => {
     if (!blnInitialized || blnGameOver) {
       return
     }
 
-    fncApplyControls()
+    const dblDeltaTime = objTicker.deltaMS ? objTicker.deltaMS / 1000 : 1 / 60
+
+    const objControlState = fncApplyControls()
 
     const dblPreviousY = objPlayerState.dblPositionY
     objPlayerState.dblVelocityY = Math.min(
@@ -68,10 +74,11 @@ export function createGameEngine({
     )
     objPlayerState.dblPositionY += objPlayerState.dblVelocityY
 
-    fncHandleCollisions(dblPreviousY)
+    fncHandleCollisions(dblPreviousY, Boolean(objControlState.blnJumpActive))
     updatePlayerSprite(objPlayerGraphic, objPlayerState)
     fncUpdateScore()
     fncUpdateCamera()
+    fncUpdatePlatformTimers(dblDeltaTime)
     fncRecyclePlatforms()
     fncCheckGameOver()
   }
@@ -83,12 +90,24 @@ export function createGameEngine({
       dblVelocityY: 0,
       dblWidth: PLAYER_WIDTH,
       dblHeight: PLAYER_HEIGHT,
+      blnIsGrounded: false,
     }
     dblHighestAltitude = objPlayerState.dblPositionY
   }
 
   function fncRandomWidth() {
     return PLATFORM_WIDTH_MIN + Math.random() * (PLATFORM_WIDTH_MAX - PLATFORM_WIDTH_MIN)
+  }
+
+  function fncResetPlatformRuntimeState(objPlatformState) {
+    if (!objPlatformState) {
+      return
+    }
+
+    objPlatformState.blnActive = true
+    objPlatformState.blnVanishTriggered = false
+    objPlatformState.dblVanishDuration = 0
+    objPlatformState.dblRemainingVanishTime = 0
   }
 
   function fncRebuildPlatforms() {
@@ -111,6 +130,8 @@ export function createGameEngine({
         dblWidth,
         dblHeight: PLATFORM_HEIGHT,
       }
+
+      fncResetPlatformRuntimeState(objPlatformState)
 
       const objPlatformSyncResult = updatePlatformSprite(objPlatformState.objGraphic, objPlatformState)
       if (!objPlatformSyncResult.success) {
@@ -165,7 +186,7 @@ export function createGameEngine({
   }
 
   function fncApplyControls() {
-    const objControlState = fncGetControlState() || { blnMovingLeft: false, blnMovingRight: false }
+    const objControlState = (typeof fncGetControlState === 'function' ? fncGetControlState() : null) || objFallbackControls
 
     if (objControlState.blnMovingLeft) {
       objPlayerState.dblPositionX = Math.max(0, objPlayerState.dblPositionX - PLAYER_HORIZONTAL_SPEED)
@@ -177,9 +198,18 @@ export function createGameEngine({
         objPlayerState.dblPositionX + PLAYER_HORIZONTAL_SPEED,
       )
     }
+
+    if (objControlState.blnJumpActive && objPlayerState.blnIsGrounded) {
+      objPlayerState.dblVelocityY = PLAYER_JUMP_VELOCITY
+      objPlayerState.blnIsGrounded = false
+    }
+
+    return objControlState
   }
 
-  function fncHandleCollisions(dblPreviousY) {
+  function fncHandleCollisions(dblPreviousY, blnJumpActive) {
+    objPlayerState.blnIsGrounded = false
+
     if (objPlayerState.dblVelocityY <= 0) {
       return
     }
@@ -187,6 +217,10 @@ export function createGameEngine({
     const dblPlayerBottom = objPlayerState.dblPositionY + objPlayerState.dblHeight
 
     for (const objPlatform of arrPlatformState) {
+      if (!objPlatform.blnActive) {
+        continue
+      }
+
       const dblPlatformTop = objPlatform.dblPositionY
 
       if (
@@ -196,8 +230,62 @@ export function createGameEngine({
         objPlayerState.dblPositionX < objPlatform.dblPositionX + objPlatform.dblWidth
       ) {
         objPlayerState.dblPositionY = dblPlatformTop - objPlayerState.dblHeight
-        objPlayerState.dblVelocityY = PLAYER_JUMP_VELOCITY
+        objPlayerState.blnIsGrounded = true
+
+        if (blnJumpActive) {
+          objPlayerState.dblVelocityY = PLAYER_JUMP_VELOCITY
+          objPlayerState.blnIsGrounded = false
+        } else {
+          objPlayerState.dblVelocityY = 0
+        }
+
+        fncTriggerPlatformVanish(objPlatform)
         return
+      }
+    }
+  }
+
+    function fncComputePlatformVanishDuration() {
+    const dblScorePenalty = intScore * PLATFORM_VANISH_TIME_SCORE_FACTOR
+    const dblCalculatedDuration = PLATFORM_VANISH_TIME_BASE - dblScorePenalty
+
+    return Math.max(PLATFORM_VANISH_TIME_MIN, dblCalculatedDuration)
+  }
+
+  function fncTriggerPlatformVanish(objPlatformState) {
+    if (!objPlatformState || objPlatformState.blnVanishTriggered) {
+      return
+    }
+
+    const dblVanishDuration = fncComputePlatformVanishDuration()
+    objPlatformState.blnVanishTriggered = true
+    objPlatformState.blnActive = true
+    objPlatformState.dblVanishDuration = dblVanishDuration
+    objPlatformState.dblRemainingVanishTime = dblVanishDuration
+  }
+
+  function fncUpdatePlatformTimers(dblDeltaTime) {
+    if (!Number.isFinite(dblDeltaTime) || dblDeltaTime <= 0) {
+      return
+    }
+
+    for (const objPlatform of arrPlatformState) {
+      if (!objPlatform.blnActive || !objPlatform.blnVanishTriggered) {
+        continue
+      }
+
+      if (objPlatform.dblRemainingVanishTime <= 0) {
+        continue
+      }
+
+      objPlatform.dblRemainingVanishTime = Math.max(
+        0,
+        objPlatform.dblRemainingVanishTime - dblDeltaTime,
+      )
+
+      if (objPlatform.dblRemainingVanishTime <= 0) {
+        objPlatform.dblRemainingVanishTime = 0
+        objPlatform.blnActive = false
       }
     }
   }
@@ -217,6 +305,7 @@ export function createGameEngine({
       if (dblScreenY > CANVAS_HEIGHT + PLATFORM_RECYCLE_BUFFER) {
         objPlatform.dblPositionY = dblHighestPlatformY - PLATFORM_VERTICAL_SPACING
         objPlatform.dblWidth = fncRandomWidth()
+        fncResetPlatformRuntimeState(objPlatform)
         dblHighestPlatformY = objPlatform.dblPositionY
       }
 
