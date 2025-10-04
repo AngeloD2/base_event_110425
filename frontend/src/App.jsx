@@ -10,7 +10,7 @@ function App() {
   return (
     <main className="app-shell">
       <h1 className="app-title">Base Event Platformer</h1>
-      <p className="app-description">Use the arrow keys to move and the space bar to jump.</p>
+      <p className="app-description">Use the arrow keys or A / D to navigate between platforms.</p>
       <GameCanvas />
     </main>
   )

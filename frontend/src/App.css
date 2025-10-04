@@ -1,7 +1,7 @@
 /**
  * System: Base Event Platformer
  * Module: Application Styles
- * Purpose: Style the layout for the platformer shell and PixiJS canvas wrapper
+ * Purpose: Style the layout for the platformer shell, PixiJS canvas wrapper, and UI overlays
  */
 .app-shell {
   display: flex;
@@ -25,11 +25,61 @@
 }
 
 .game-container {
+  position: relative;
   border-radius: 12px;
   box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
 
-.game-container canvas {
+.game-stage {
+  width: fit-content;
+}
+
+.game-stage canvas {
   display: block;
+}
+
+.game-overlay {
+  position: absolute;
+  top: 0.75rem;
+  left: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 600;
+  color: #f8edeb;
+  text-shadow: 0 3px 8px rgba(0, 0, 0, 0.6);
+}
+
+.game-score {
+  font-size: 1rem;
+  pointer-events: none;
+}
+
+.game-warning {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #ffd166;
+}
+
+.game-error {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #ef476f;
+}
+
+.game-button {
+  pointer-events: auto;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 6px;
+  background-color: #118ab2;
+  color: #f5ebe0;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.game-button:hover {
+  background-color: #0f6f94;
 }

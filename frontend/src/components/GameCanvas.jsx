@@ -1,188 +1,185 @@
 /**
  * System: Base Event Platformer
  * Module: Game Canvas Component
- * Purpose: Render a PixiJS-powered canvas with basic 2D platformer controls
+ * Purpose: Host the PixiJS application, coordinate the game engine lifecycle, and expose UI overlays
  */
-import { useEffect, useRef } from 'react'
-import { Application, Graphics } from 'pixi.js'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Application } from 'pixi.js'
+import { createGameEngine } from '../game/GameEngine.js'
+import {
+  CANVAS_WIDTH,
+  CANVAS_HEIGHT,
+  BACKGROUND_COLOR,
+} from '../game/gameConstants.js'
+import useKeyboardControls from '../hooks/useKeyboardControls.js'
 
-const CANVAS_WIDTH = 960
-const CANVAS_HEIGHT = 540
-const GROUND_HEIGHT = 80
-const PLAYER_SIZE = 48
-const BACKGROUND_COLOR = 0x0d1b2a
-const PLAYER_COLOR = 0xffe066
-const GROUND_COLOR = 0x415a77
-const MOVE_SPEED = 4
-const GRAVITY_FORCE = 0.7
-const JUMP_FORCE = -14
-const KEY_CODE_LEFT = 'ArrowLeft'
-const KEY_CODE_RIGHT = 'ArrowRight'
-const KEY_CODE_JUMP = 'Space'
-const KEY_CODE_ALT_JUMP = 'ArrowUp'
+const objDefaultControls = { blnMovingLeft: false, blnMovingRight: false }
 
 function GameCanvas() {
   const objCanvasContainerRef = useRef(null)
+  const objApplicationRef = useRef(null)
+  const objEngineRef = useRef(null)
+  const objControlSnapshotRef = useRef(objDefaultControls)
+  const objControlsStatusRef = useRef({ success: false, error: 'Pending' })
+
+  const [intScore, setIntScore] = useState(0)
+  const [blnGameOver, setBlnGameOver] = useState(false)
+  const [strErrorMessage, setStrErrorMessage] = useState('')
+
+  const objControlsResult = useKeyboardControls()
+
+  if (objControlsResult.success) {
+    objControlSnapshotRef.current = objControlsResult.data
+  }
+  objControlsStatusRef.current = objControlsResult
+
+  const fncGetControlState = useCallback(() => {
+    if (objControlsStatusRef.current.success) {
+      return objControlSnapshotRef.current
+    }
+
+    return objDefaultControls
+  }, [])
 
   useEffect(() => {
-    const objActiveKeys = new Set()
-    const objPlayerState = {
-      dblVelocityY: 0,
-      blnOnGround: false,
-    }
+    let blnIsCancelled = false
+    const objCanvasContainerElement = objCanvasContainerRef.current
 
-    let objApplication = null
-    let objTicker = null
-    let objPlayer = null
-    let objGround = null
-    let blnListenersAttached = false
-    let blnShouldAbort = false
-
-    function fncHandleKeyDown(objEvent) {
-      if (blnShouldAbort) {
-        return
-      }
-
-      objActiveKeys.add(objEvent.code)
-
-      if (
-        (objEvent.code === KEY_CODE_JUMP || objEvent.code === KEY_CODE_ALT_JUMP) &&
-        objPlayerState.blnOnGround
-      ) {
-        objPlayerState.dblVelocityY = JUMP_FORCE
-        objPlayerState.blnOnGround = false
-      }
-    }
-
-    function fncHandleKeyUp(objEvent) {
-      if (blnShouldAbort) {
-        return
-      }
-
-      objActiveKeys.delete(objEvent.code)
-    }
-
-    function fncUpdateGame() {
-      if (!objPlayer) {
-        return
-      }
-
-      if (objActiveKeys.has(KEY_CODE_LEFT)) {
-        objPlayer.x = Math.max(0, objPlayer.x - MOVE_SPEED)
-      }
-
-      if (objActiveKeys.has(KEY_CODE_RIGHT)) {
-        objPlayer.x = Math.min(CANVAS_WIDTH - PLAYER_SIZE, objPlayer.x + MOVE_SPEED)
-      }
-
-      objPlayerState.dblVelocityY += GRAVITY_FORCE
-      objPlayer.y += objPlayerState.dblVelocityY
-
-      const intGroundLevel = CANVAS_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE
-
-      if (objPlayer.y >= intGroundLevel) {
-        objPlayer.y = intGroundLevel
-        objPlayerState.dblVelocityY = 0
-        objPlayerState.blnOnGround = true
-      } else {
-        objPlayerState.blnOnGround = false
-      }
-    }
-
-    function fncRemoveListeners() {
-      if (blnListenersAttached) {
-        window.removeEventListener('keydown', fncHandleKeyDown)
-        window.removeEventListener('keyup', fncHandleKeyUp)
-        blnListenersAttached = false
-      }
-    }
-
-    function fncDisposeApplication() {
-      if (objTicker) {
-        objTicker.remove(fncUpdateGame)
-        objTicker = null
-      }
-
-      if (objApplication) {
-        objApplication.destroy(true, { children: true })
-        objApplication = null
-      }
-
-      objPlayer = null
-      objGround = null
-    }
-
-    async function fncInitializeScene() {
+    async function fncInitialize() {
       try {
-        const objInitializedApplication = await Application.init({
+        const objInitializedApplication = new Application()
+        await objInitializedApplication.init({
           width: CANVAS_WIDTH,
           height: CANVAS_HEIGHT,
           background: BACKGROUND_COLOR,
           antialias: true,
         })
 
-        if (blnShouldAbort) {
+        if (blnIsCancelled) {
           objInitializedApplication.destroy(true, { children: true })
           return
         }
 
-        objApplication = objInitializedApplication
+        objApplicationRef.current = objInitializedApplication
 
-        if (!objCanvasContainerRef.current) {
-          fncDisposeApplication()
+        if (!objCanvasContainerElement) {
+          objInitializedApplication.destroy(true, { children: true })
+          objApplicationRef.current = null
           return
         }
 
-        objCanvasContainerRef.current.appendChild(objApplication.canvas)
+        objCanvasContainerElement.innerHTML = ''
+        objCanvasContainerElement.appendChild(objInitializedApplication.canvas)
 
-        objGround = new Graphics()
-        objGround.beginFill(GROUND_COLOR)
-        objGround.drawRect(0, CANVAS_HEIGHT - GROUND_HEIGHT, CANVAS_WIDTH, GROUND_HEIGHT)
-        objGround.endFill()
-        objApplication.stage.addChild(objGround)
+        const objEngineResult = createGameEngine({
+          objApplication: objInitializedApplication,
+          fncGetControlState,
+          fncOnScoreUpdate: (intNewScore) => setIntScore(intNewScore),
+          fncOnGameOver: () => setBlnGameOver(true),
+        })
 
-        objPlayer = new Graphics()
-        objPlayer.beginFill(PLAYER_COLOR)
-        objPlayer.drawRoundedRect(0, 0, PLAYER_SIZE, PLAYER_SIZE, 8)
-        objPlayer.endFill()
-        objPlayer.x = CANVAS_WIDTH / 2 - PLAYER_SIZE / 2
-        objPlayer.y = CANVAS_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE
-        objApplication.stage.addChild(objPlayer)
-
-        objTicker = objApplication.ticker ?? null
-
-        if (objTicker) {
-          objTicker.add(fncUpdateGame)
+        if (!objEngineResult.success) {
+          setStrErrorMessage('Unable to configure the game engine.')
+          objInitializedApplication.destroy(true, { children: true })
+          objApplicationRef.current = null
+          return
         }
 
-        if (!blnListenersAttached) {
-          window.addEventListener('keydown', fncHandleKeyDown)
-          window.addEventListener('keyup', fncHandleKeyUp)
-          blnListenersAttached = true
+        objEngineRef.current = objEngineResult.data
+
+        const objInitResult = objEngineRef.current.initializeStage()
+        if (!objInitResult.success) {
+          setStrErrorMessage('Unable to initialize the game stage.')
+          objInitializedApplication.destroy(true, { children: true })
+          objApplicationRef.current = null
+          objEngineRef.current = null
+          return
+        }
+
+        const objStartResult = objEngineRef.current.start()
+        if (!objStartResult.success) {
+          setStrErrorMessage('Unable to start the game loop.')
+          objInitializedApplication.destroy(true, { children: true })
+          objApplicationRef.current = null
+          objEngineRef.current = null
         }
       } catch (objError) {
         console.error('Failed to initialize PixiJS application', objError)
-        fncRemoveListeners()
-        fncDisposeApplication()
+        setStrErrorMessage('Failed to initialize the PixiJS renderer.')
       }
     }
 
-    fncInitializeScene()
+    fncInitialize()
 
     return () => {
-      blnShouldAbort = true
-      objActiveKeys.clear()
-      fncRemoveListeners()
-      fncDisposeApplication()
+      blnIsCancelled = true
+      setBlnGameOver(false)
+      setIntScore(0)
+
+      if (objEngineRef.current) {
+        objEngineRef.current.stop()
+        objEngineRef.current = null
+      }
+
+      if (objApplicationRef.current) {
+        objApplicationRef.current.destroy(true, { children: true })
+        objApplicationRef.current = null
+      }
+
+      if (objCanvasContainerElement) {
+        objCanvasContainerElement.innerHTML = ''
+      }
     }
-  }, [])
+  }, [fncGetControlState])
+
+  const blnControlsUnavailable = !objControlsStatusRef.current.success
+
+  const fncHandleRestart = () => {
+    if (!objEngineRef.current) {
+      return
+    }
+
+    const objResetResult = objEngineRef.current.reset()
+
+    if (!objResetResult.success) {
+      setStrErrorMessage('Unable to reset the game.')
+      return
+    }
+
+    const objStartResult = objEngineRef.current.start()
+    if (!objStartResult.success) {
+      setStrErrorMessage('Unable to restart the game loop.')
+      return
+    }
+
+    setBlnGameOver(false)
+    setStrErrorMessage('')
+    setIntScore(0)
+  }
 
   return (
-    <section
-      aria-label="Platformer game canvas"
-      className="game-container"
-      ref={objCanvasContainerRef}
-    />
+    <section className="game-container" aria-live="polite">
+      <div
+        className="game-stage"
+        ref={objCanvasContainerRef}
+        role="presentation"
+        aria-label="Platformer game canvas"
+      />
+      <div className="game-overlay">
+        <span className="game-score" aria-label={'Current score ' + intScore}>
+          Score: {intScore}
+        </span>
+        {blnControlsUnavailable && (
+          <p className="game-warning">Keyboard controls are unavailable in this environment.</p>
+        )}
+        {strErrorMessage && <p className="game-error">{strErrorMessage}</p>}
+        {blnGameOver && (
+          <button type="button" className="game-button" onClick={fncHandleRestart}>
+            Restart
+          </button>
+        )}
+      </div>
+    </section>
   )
 }
 
