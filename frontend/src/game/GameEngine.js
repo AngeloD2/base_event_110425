@@ -46,6 +46,7 @@ export function createGameEngine({
   fncGetControlState,
   fncOnScoreUpdate,
   fncOnGameOver,
+  strCharacterUrl,
 }) {
   if (!objApplication || typeof fncGetControlState !== 'function') {
     return { success: false, error: 'GameEngineConfigurationInvalid' }
@@ -318,7 +319,7 @@ export function createGameEngine({
 
     fncResetPlayerState()
 
-    const objPlayerCreationResult = createPlayerSprite(objStageContainer)
+    const objPlayerCreationResult = createPlayerSprite(objStageContainer, strCharacterUrl)
     if (!objPlayerCreationResult.success) {
       return objPlayerCreationResult
     }

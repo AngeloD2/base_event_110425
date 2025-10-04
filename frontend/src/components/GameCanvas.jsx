@@ -35,6 +35,14 @@ function GameCanvas() {
   const [strSaveStatusMessage, setStrSaveStatusMessage] = useState('')
   const [objAudioState, setObjAudioState] = useState(null)
   const [dblMusicVolume, setDblMusicVolume] = useState(BACKGROUND_MUSIC_VOLUME_DEFAULT)
+  const [strSelectedCharacter, setStrSelectedCharacter] = useState(null);
+  const [blnShowCharacterSelection, setBlnShowCharacterSelection] = useState(true);
+
+  const arrCharacters = [
+    { name: 'Blue', url: 'cat-blue.png' },
+    { name: 'Orange', url: 'cat-orange.png' },
+    { name: 'Purple', url: 'cat-purple.png' },
+  ];
 
   const objControlsResult = useKeyboardControls()
 
@@ -69,6 +77,9 @@ function GameCanvas() {
   }, [])
 
   useEffect(() => {
+    if (blnShowCharacterSelection) {
+      return;
+    }
     let blnIsCancelled = false
     const objCanvasContainerElement = objCanvasContainerRef.current
 
@@ -102,15 +113,21 @@ function GameCanvas() {
           },
         })
 
-        // Add background and audio asset bundles
+        // Add background, audio and character asset bundles
         Assets.addBundle('background', [
           { alias: 'background', src: BACKGROUND_IMAGE_PATH },
           { alias: 'platform', src: 'platform.png' }
-        ])
+        ]);
 
         Assets.addBundle('audio', [
           { alias: 'music', src: BACKGROUND_MUSIC_PATH }
-        ])
+        ]);
+
+        Assets.addBundle('characters', [
+            { alias: 'cat-blue', src: 'cat-blue.png' },
+            { alias: 'cat-orange', src: 'cat-orange.png' },
+            { alias: 'cat-purple', src: 'cat-purple.png' },
+        ]);
 
         const objInitializedApplication = new Application()
         await objInitializedApplication.init({
@@ -136,19 +153,25 @@ function GameCanvas() {
         objCanvasContainerElement.innerHTML = ''
         objCanvasContainerElement.appendChild(objInitializedApplication.canvas)
 
-        // Load background and audio assets with proper error handling
+        // Load background, audio and character assets with proper error handling
         try {
-          await Assets.loadBundle('background')
+          await Assets.loadBundle('background');
         } catch (objAssetError) {
-          console.warn('Background texture failed to load, using solid color background', objAssetError)
+          console.warn('Background texture failed to load, using solid color background', objAssetError);
           // Don't fail the entire initialization if background fails
         }
 
         try {
-          await Assets.loadBundle('audio')
+          await Assets.loadBundle('audio');
         } catch (objAudioError) {
-          console.warn('Audio file failed to load, game will proceed without background music', objAudioError)
+          console.warn('Audio file failed to load, game will proceed without background music', objAudioError);
           // Don't fail the entire initialization if audio fails
+        }
+
+        try {
+            await Assets.loadBundle('characters');
+        } catch (objAssetError) {
+            console.warn('Character assets failed to load', objAssetError);
         }
 
         if (blnIsCancelled) {
@@ -162,6 +185,7 @@ function GameCanvas() {
           fncGetControlState,
           fncOnScoreUpdate: (intNewScore) => setIntScore(intNewScore),
           fncOnGameOver: fncHandleGameOver,
+          strCharacterUrl: strSelectedCharacter,
         })
 
         if (!objEngineResult.success) {
@@ -232,7 +256,7 @@ function GameCanvas() {
 
       objPointerJumpRef.current = false
     }
-  }, [fncGetControlState, fncHandleGameOver])
+  }, [fncGetControlState, fncHandleGameOver, blnShowCharacterSelection, strSelectedCharacter])
 
   const blnControlsUnavailable = !objControlsStatusRef.current.success
 
@@ -321,6 +345,34 @@ function GameCanvas() {
     }
 
     localStorage.setItem('musicVolume', dblNewVolume.toString())
+  }
+
+  const fncHandleCharacterSelection = (strUrl) => {
+    setStrSelectedCharacter(strUrl);
+    setBlnShowCharacterSelection(false);
+  };
+
+  if (blnShowCharacterSelection) {
+    return (
+      <div className="game-modal-backdrop">
+        <div className="game-modal">
+          <h2 className="game-over-title">Select Your Character</h2>
+          <div className="character-selection">
+            {arrCharacters.map((objCharacter) => (
+              <button
+                key={objCharacter.name}
+                type="button"
+                className="character-button"
+                onClick={() => fncHandleCharacterSelection(objCharacter.url)}
+              >
+                <img src={objCharacter.url} alt={objCharacter.name} />
+                <span>{objCharacter.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
