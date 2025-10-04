@@ -3,13 +3,17 @@
  * Module: Game Engine
  * Purpose: Orchestrate physics, collision handling, camera scrolling, and score tracking for the platformer
  */
-import { Container } from 'pixi.js'
+import { Container, Sprite, Assets } from 'pixi.js'
 import { createPlayerSprite, updatePlayerSprite } from './PlayerSprite.js'
 import { createPlatformSprite, updatePlatformSprite } from './PlatformSprite.js'
+import { createAudioManager } from './AudioManager.js'
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   BACKGROUND_COLOR,
+  BACKGROUND_IMAGE_PATH,
+  BACKGROUND_SCALE_MULTIPLIER,
+  BACKGROUND_SCROLL_RATIO,
   CAMERA_SCROLL_TRIGGER_Y,
   PLAYER_WIDTH,
   PLAYER_HEIGHT,
@@ -26,9 +30,15 @@ import {
   PLATFORM_VANISH_TIME_BASE,
   PLATFORM_VANISH_TIME_MIN,
   PLATFORM_VANISH_TIME_SCORE_FACTOR,
+  SAFE_START_PLATFORM_INDEX,
+  SAFE_PLATFORM_SCORE_THRESHOLD,
   PLAYER_START_OFFSET_Y,
   SCORE_PER_PIXEL,
   GAME_OVER_OFFSET,
+  BACKGROUND_MUSIC_PATH,
+  BACKGROUND_MUSIC_VOLUME_DEFAULT,
+  BACKGROUND_MUSIC_VOLUME_MIN,
+  BACKGROUND_MUSIC_VOLUME_MAX,
 } from './gameConstants.js'
 
 export function createGameEngine({
@@ -36,6 +46,7 @@ export function createGameEngine({
   fncGetControlState,
   fncOnScoreUpdate,
   fncOnGameOver,
+  strCharacterUrl,
 }) {
   if (!objApplication || typeof fncGetControlState !== 'function') {
     return { success: false, error: 'GameEngineConfigurationInvalid' }
@@ -49,6 +60,7 @@ export function createGameEngine({
   const objStageContainer = new Container()
   objStageContainer.sortableChildren = false
 
+  let objBackgroundSprite = null
   let objPlayerGraphic = null
   let objPlayerState = null
   let arrPlatformState = []
@@ -58,6 +70,115 @@ export function createGameEngine({
   let dblHighestAltitude = PLAYER_START_OFFSET_Y
   let intScore = 0
   const objFallbackControls = { blnMovingLeft: false, blnMovingRight: false, blnJumpActive: false }
+  let objAudioManager = null
+  const fncLocateSafeStartPlatform = () => arrPlatformState.find((objPlatform) => objPlatform.blnSafeStartPlatform)
+  const fncRespawnOnSafePlatform = () => {
+    const objSafePlatform = fncLocateSafeStartPlatform()
+
+    if (!objSafePlatform) {
+      fncResetPlayerState()
+      updatePlayerSprite(objPlayerGraphic, objPlayerState)
+      return
+    }
+
+    objPlayerState.dblPositionX = objSafePlatform.dblPositionX + ((objSafePlatform.dblWidth - objPlayerState.dblWidth) / 2)
+    objPlayerState.dblPositionY = objSafePlatform.dblPositionY - objPlayerState.dblHeight
+    objPlayerState.dblVelocityY = 0
+    objPlayerState.blnIsGrounded = true
+    objStageContainer.y = 0
+    fncUpdateBackgroundPosition()
+    dblHighestAltitude = objPlayerState.dblPositionY
+    updatePlayerSprite(objPlayerGraphic, objPlayerState)
+  }
+  function fncInitializeBackground() {
+    if (!objBackgroundSprite) {
+      try {
+        // Check if background texture is loaded in Assets cache
+        const objBackgroundTexture = Assets.get('background')
+
+        if (objBackgroundTexture && objBackgroundTexture.valid) {
+          // Create sprite from loaded texture
+          objBackgroundSprite = new Sprite(objBackgroundTexture)
+        } else {
+          // Fallback: try to create sprite from path (may fail gracefully)
+          try {
+            objBackgroundSprite = Sprite.from(BACKGROUND_IMAGE_PATH)
+          } catch {
+            console.warn('Background texture not found in cache, using solid color background')
+            return { success: true } // Success with no background sprite
+          }
+        }
+      } catch (objError) {
+        console.warn('Failed to create background sprite, using solid color background', objError)
+        return { success: true } // Success with no background sprite
+      }
+
+      // Configure background sprite
+      objBackgroundSprite.anchor.set(0, 0)
+      objBackgroundSprite.x = 0
+      objBackgroundSprite.y = 0
+      objBackgroundSprite.eventMode = 'none'
+
+      // Handle texture loading if needed
+      if (objBackgroundSprite.texture && !objBackgroundSprite.texture.valid) {
+        if (typeof objBackgroundSprite.texture.once === 'function') {
+          objBackgroundSprite.texture.once('update', () => {
+            fncSyncBackgroundScale()
+            fncUpdateBackgroundPosition()
+          })
+        }
+      } else {
+        // Texture is already valid, scale immediately
+        fncSyncBackgroundScale()
+        fncUpdateBackgroundPosition()
+      }
+    }
+
+    // Add background to stage if it exists
+    if (objBackgroundSprite && objBackgroundSprite.parent !== objApplication.stage) {
+      objApplication.stage.addChildAt(objBackgroundSprite, 0)
+    }
+
+    return { success: true }
+  }
+
+  function fncSyncBackgroundScale() {
+    if (!objBackgroundSprite || !objBackgroundSprite.texture || !objBackgroundSprite.texture.valid) {
+      return
+    }
+
+    // Calculate scale to ensure background covers canvas with zoom effect
+    const dblWidthRatio = CANVAS_WIDTH / objBackgroundSprite.texture.width
+    const dblHeightRatio = CANVAS_HEIGHT / objBackgroundSprite.texture.height
+    const dblAppliedScale = Math.max(dblWidthRatio, dblHeightRatio) * BACKGROUND_SCALE_MULTIPLIER
+
+    // Apply smooth scaling with improved zoom
+    objBackgroundSprite.scale.set(dblAppliedScale)
+
+    // Center the background horizontally for better composition
+    const dblHorizontalOffset = (CANVAS_WIDTH - objBackgroundSprite.width) / 2
+    objBackgroundSprite.x = dblHorizontalOffset
+
+    // Start background at top center for better visual presentation
+    objBackgroundSprite.y = 0
+  }
+
+  function fncUpdateBackgroundPosition() {
+    if (!objBackgroundSprite) {
+      return
+    }
+
+    // Calculate parallax offset with slower, more subtle movement
+    const dblTargetOffset = -objStageContainer.y * BACKGROUND_SCROLL_RATIO
+
+    // Ensure background stays within bounds while allowing smooth scrolling
+    const dblMinimumOffset = Math.min(0, CANVAS_HEIGHT - objBackgroundSprite.height)
+    const dblMaximumOffset = 0
+
+    // Apply smooth parallax movement with bounds checking
+    objBackgroundSprite.y = Math.max(dblMinimumOffset, Math.min(dblMaximumOffset, dblTargetOffset))
+  }
+
   const fncUpdateFrame = () => {
     if (!blnInitialized || blnGameOver) {
       return
@@ -117,6 +238,7 @@ export function createGameEngine({
       const dblPositionY = PLAYER_START_OFFSET_Y + PLAYER_HEIGHT + PLATFORM_HEIGHT - intIndex * PLATFORM_VERTICAL_SPACING
       const dblRange = Math.max(0, CANVAS_WIDTH - dblWidth)
       const dblPositionX = dblRange === 0 ? 0 : Math.random() * dblRange
+      const blnSafeStartPlatform = intIndex === SAFE_START_PLATFORM_INDEX
 
       const objPlatformCreationResult = createPlatformSprite(objStageContainer)
       if (!objPlatformCreationResult.success) {
@@ -129,6 +251,7 @@ export function createGameEngine({
         dblPositionY,
         dblWidth,
         dblHeight: PLATFORM_HEIGHT,
+        blnSafeStartPlatform,
       }
 
       fncResetPlatformRuntimeState(objPlatformState)
@@ -144,19 +267,59 @@ export function createGameEngine({
     return { success: true }
   }
 
+  function fncInitializeAudio() {
+    if (objAudioManager) {
+      return { success: true }
+    }
+
+    const objAudioResult = createAudioManager({
+      strAudioPath: BACKGROUND_MUSIC_PATH,
+      dblVolumeDefault: BACKGROUND_MUSIC_VOLUME_DEFAULT,
+      dblVolumeMin: BACKGROUND_MUSIC_VOLUME_MIN,
+      dblVolumeMax: BACKGROUND_MUSIC_VOLUME_MAX,
+    })
+
+    if (!objAudioResult.success) {
+      console.warn('Audio manager initialization failed:', objAudioResult.error)
+      return { success: true }
+    }
+
+    objAudioManager = objAudioResult.data
+
+    const objAudioInitResult = objAudioManager.initializeAudio()
+    if (!objAudioInitResult.success) {
+      console.warn('Audio system initialization failed:', objAudioInitResult.error)
+      return { success: true }
+    }
+
+    return { success: true }
+  }
+
   function fncInitializeStage() {
     if (blnInitialized) {
       return { success: true }
     }
 
-    objApplication.stage.addChild(objStageContainer)
+    const objBackgroundInitResult = fncInitializeBackground()
+    if (!objBackgroundInitResult.success) {
+      return objBackgroundInitResult
+    }
+
+    const objAudioInitResult = fncInitializeAudio()
+    if (!objAudioInitResult.success) {
+      return objAudioInitResult
+    }
+
+    if (objStageContainer.parent !== objApplication.stage) {
+      objApplication.stage.addChild(objStageContainer)
+    }
     if (objApplication.renderer && objApplication.renderer.background) {
       objApplication.renderer.background.color = BACKGROUND_COLOR
     }
 
     fncResetPlayerState()
 
-    const objPlayerCreationResult = createPlayerSprite(objStageContainer)
+    const objPlayerCreationResult = createPlayerSprite(objStageContainer, strCharacterUrl)
     if (!objPlayerCreationResult.success) {
       return objPlayerCreationResult
     }
@@ -174,6 +337,7 @@ export function createGameEngine({
     }
 
     objStageContainer.y = 0
+    fncUpdateBackgroundPosition()
     intScore = 0
     blnInitialized = true
     blnGameOver = false
@@ -254,6 +418,10 @@ export function createGameEngine({
 
   function fncTriggerPlatformVanish(objPlatformState) {
     if (!objPlatformState || objPlatformState.blnVanishTriggered) {
+      return
+    }
+
+    if (objPlatformState.blnSafeStartPlatform && intScore <= SAFE_PLATFORM_SCORE_THRESHOLD) {
       return
     }
 
@@ -340,6 +508,11 @@ export function createGameEngine({
     const dblPlayerViewportY = objPlayerState.dblPositionY + objStageContainer.y
 
     if (dblPlayerViewportY > CANVAS_HEIGHT + GAME_OVER_OFFSET && !blnGameOver) {
+      if (intScore <= SAFE_PLATFORM_SCORE_THRESHOLD) {
+        fncRespawnOnSafePlatform()
+        return
+      }
+
       blnGameOver = true
       fncStop()
 
@@ -365,6 +538,12 @@ export function createGameEngine({
     blnRunning = true
     blnGameOver = false
 
+    if (objAudioManager) {
+      objAudioManager.playMusic().catch((objError) => {
+        console.warn('Failed to start background music:', objError)
+      })
+    }
+
     return { success: true }
   }
 
@@ -376,6 +555,10 @@ export function createGameEngine({
     objTicker.remove(fncUpdateFrame)
     blnRunning = false
 
+    if (objAudioManager) {
+      objAudioManager.pauseMusic()
+    }
+
     return { success: true }
   }
 
@@ -383,12 +566,18 @@ export function createGameEngine({
     objStageContainer.removeChildren()
     objPlayerGraphic = null
     arrPlatformState = []
+
+    if (objAudioManager) {
+      objAudioManager.cleanup()
+      objAudioManager = null
+    }
   }
 
   function fncReset() {
     fncStop()
     fncClearStage()
     objStageContainer.y = 0
+    fncUpdateBackgroundPosition()
     blnInitialized = false
     blnGameOver = false
     intScore = 0
@@ -415,6 +604,10 @@ export function createGameEngine({
       getStageContainer: () => objStageContainer,
       getScore: () => intScore,
       isGameOver: () => blnGameOver,
+      getAudioManager: () => objAudioManager,
+      toggleMusic: () => objAudioManager ? objAudioManager.toggleMusic() : { success: false, error: 'AudioManagerNotAvailable' },
+      setMusicVolume: (dblVolume) => objAudioManager ? objAudioManager.setVolume(dblVolume) : { success: false, error: 'AudioManagerNotAvailable' },
+      getAudioState: () => objAudioManager ? objAudioManager.getAudioState() : null,
     },
   }
 }

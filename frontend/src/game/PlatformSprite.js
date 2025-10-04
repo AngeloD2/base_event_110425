@@ -3,46 +3,37 @@
  * Module: Platform Sprite Helpers
  * Purpose: Create and update PixiJS graphics representing jump platforms
  */
-import { Graphics } from 'pixi.js'
-import {
-  PLATFORM_COLOR,
-  PLATFORM_HEIGHT,
-} from './gameConstants.js'
+import { Sprite, Texture } from 'pixi.js'
+import { PLATFORM_HEIGHT } from './gameConstants.js'
 
 export function createPlatformSprite(objStageContainer) {
   if (!objStageContainer) {
     return { success: false, error: 'PlatformStageMissing' }
   }
 
-  const objPlatformGraphic = new Graphics()
-  objPlatformGraphic.beginFill(PLATFORM_COLOR)
-  objPlatformGraphic.drawRoundedRect(0, 0, PLATFORM_HEIGHT, PLATFORM_HEIGHT, 6)
-  objPlatformGraphic.endFill()
-  objPlatformGraphic.x = 0
-  objPlatformGraphic.y = 0
-  objStageContainer.addChild(objPlatformGraphic)
+  const objPlatformSprite = new Sprite(Texture.from('platform'))
+  objPlatformSprite.height = PLATFORM_HEIGHT
+  objPlatformSprite.x = 0
+  objPlatformSprite.y = 0
+  objStageContainer.addChild(objPlatformSprite)
 
-  return { success: true, data: objPlatformGraphic }
+  return { success: true, data: objPlatformSprite }
 }
 
-export function updatePlatformSprite(objPlatformGraphic, objPlatformState) {
-  if (!objPlatformGraphic || !objPlatformState) {
+export function updatePlatformSprite(objPlatformSprite, objPlatformState) {
+  if (!objPlatformSprite || !objPlatformState) {
     return { success: false, error: 'PlatformSpriteUpdateInvalid' }
   }
 
   const blnIsActive = objPlatformState.blnActive !== false
-
-  objPlatformGraphic.clear()
-  objPlatformGraphic.visible = blnIsActive
+  objPlatformSprite.visible = blnIsActive
 
   if (blnIsActive) {
-    objPlatformGraphic.beginFill(PLATFORM_COLOR)
-    objPlatformGraphic.drawRoundedRect(0, 0, objPlatformState.dblWidth, PLATFORM_HEIGHT, 6)
-    objPlatformGraphic.endFill()
+    objPlatformSprite.width = objPlatformState.dblWidth
   }
 
-  objPlatformGraphic.x = objPlatformState.dblPositionX
-  objPlatformGraphic.y = objPlatformState.dblPositionY
+  objPlatformSprite.x = objPlatformState.dblPositionX
+  objPlatformSprite.y = objPlatformState.dblPositionY
 
   return { success: true }
 }

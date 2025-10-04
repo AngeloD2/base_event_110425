@@ -4,12 +4,15 @@
  * Purpose: Host the PixiJS application, coordinate the game engine lifecycle, and expose UI overlays
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Application } from 'pixi.js'
+import { Application, Assets } from 'pixi.js'
 import { createGameEngine } from '../game/GameEngine.js'
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   BACKGROUND_COLOR,
+  BACKGROUND_IMAGE_PATH,
+  BACKGROUND_MUSIC_PATH,
+  BACKGROUND_MUSIC_VOLUME_DEFAULT,
 } from '../game/gameConstants.js'
 import useKeyboardControls from '../hooks/useKeyboardControls.js'
 
@@ -30,6 +33,16 @@ function GameCanvas() {
   const [strErrorMessage, setStrErrorMessage] = useState('')
   const [blnSaveInProgress, setBlnSaveInProgress] = useState(false)
   const [strSaveStatusMessage, setStrSaveStatusMessage] = useState('')
+  const [objAudioState, setObjAudioState] = useState(null)
+  const [dblMusicVolume, setDblMusicVolume] = useState(BACKGROUND_MUSIC_VOLUME_DEFAULT)
+  const [strSelectedCharacter, setStrSelectedCharacter] = useState(null);
+  const [blnShowCharacterSelection, setBlnShowCharacterSelection] = useState(true);
+
+  const arrCharacters = [
+    { name: 'Blue', url: '/cat-blue.png' },
+    { name: 'Orange', url: '/cat-orange.png' },
+    { name: 'Purple', url: '/cat-purple.png' },
+  ];
 
   const objControlsResult = useKeyboardControls()
 
@@ -64,6 +77,9 @@ function GameCanvas() {
   }, [])
 
   useEffect(() => {
+    if (blnShowCharacterSelection) {
+      return;
+    }
     let blnIsCancelled = false
     const objCanvasContainerElement = objCanvasContainerRef.current
 
@@ -88,6 +104,31 @@ function GameCanvas() {
 
     async function fncInitialize() {
       try {
+        // Initialize PixiJS Assets system first
+        await Assets.init({
+          basePath: '/',
+          texturePreference: {
+            format: ['png', 'webp'],
+            resolution: 1,
+          },
+        })
+
+        // Add background, audio and character asset bundles
+        Assets.addBundle('background', [
+          { alias: 'background', src: BACKGROUND_IMAGE_PATH },
+          { alias: 'platform', src: 'platform.png' }
+        ]);
+
+        Assets.addBundle('audio', [
+          { alias: 'music', src: BACKGROUND_MUSIC_PATH }
+        ]);
+
+        Assets.addBundle('characters', [
+            { alias: 'cat-blue', src: 'cat-blue.png' },
+            { alias: 'cat-orange', src: 'cat-orange.png' },
+            { alias: 'cat-purple', src: 'cat-purple.png' },
+        ]);
+
         const objInitializedApplication = new Application()
         await objInitializedApplication.init({
           width: CANVAS_WIDTH,
@@ -112,11 +153,39 @@ function GameCanvas() {
         objCanvasContainerElement.innerHTML = ''
         objCanvasContainerElement.appendChild(objInitializedApplication.canvas)
 
+        // Load background, audio and character assets with proper error handling
+        try {
+          await Assets.loadBundle('background');
+        } catch (objAssetError) {
+          console.warn('Background texture failed to load, using solid color background', objAssetError);
+          // Don't fail the entire initialization if background fails
+        }
+
+        try {
+          await Assets.loadBundle('audio');
+        } catch (objAudioError) {
+          console.warn('Audio file failed to load, game will proceed without background music', objAudioError);
+          // Don't fail the entire initialization if audio fails
+        }
+
+        try {
+            await Assets.loadBundle('characters');
+        } catch (objAssetError) {
+            console.warn('Character assets failed to load', objAssetError);
+        }
+
+        if (blnIsCancelled) {
+          objInitializedApplication.destroy(true, { children: true })
+          objApplicationRef.current = null
+          return
+        }
+
         const objEngineResult = createGameEngine({
           objApplication: objInitializedApplication,
           fncGetControlState,
           fncOnScoreUpdate: (intNewScore) => setIntScore(intNewScore),
           fncOnGameOver: fncHandleGameOver,
+          strCharacterUrl: strSelectedCharacter,
         })
 
         if (!objEngineResult.success) {
@@ -135,6 +204,12 @@ function GameCanvas() {
           objApplicationRef.current = null
           objEngineRef.current = null
           return
+        }
+
+        const objAudioState = objEngineRef.current.getAudioState()
+        if (objAudioState) {
+          setObjAudioState(objAudioState)
+          setDblMusicVolume(objAudioState.dblCurrentVolume)
         }
 
         const objStartResult = objEngineRef.current.start()
@@ -158,6 +233,8 @@ function GameCanvas() {
       setIntScore(0)
       setBlnSaveInProgress(false)
       setStrSaveStatusMessage('')
+      setObjAudioState(null)
+      setDblMusicVolume(BACKGROUND_MUSIC_VOLUME_DEFAULT)
 
       if (objEngineRef.current) {
         objEngineRef.current.stop()
@@ -179,7 +256,7 @@ function GameCanvas() {
 
       objPointerJumpRef.current = false
     }
-  }, [fncGetControlState, fncHandleGameOver])
+  }, [fncGetControlState, fncHandleGameOver, blnShowCharacterSelection, strSelectedCharacter])
 
   const blnControlsUnavailable = !objControlsStatusRef.current.success
 
@@ -199,6 +276,12 @@ function GameCanvas() {
     if (!objStartResult.success) {
       setStrErrorMessage('Unable to restart the game loop.')
       return
+    }
+
+    const objAudioState = objEngineRef.current.getAudioState()
+    if (objAudioState) {
+      setObjAudioState(objAudioState)
+      setDblMusicVolume(objAudioState.dblCurrentVolume)
     }
 
     setBlnGameOver(false)
@@ -239,8 +322,61 @@ function GameCanvas() {
     }
   }
 
+  const fncHandleToggleMusic = () => {
+    if (!objEngineRef.current) {
+      return
+    }
+
+    const objToggleResult = objEngineRef.current.toggleMusic()
+    if (objToggleResult.success) {
+      const objAudioState = objEngineRef.current.getAudioState()
+      if (objAudioState) {
+        setObjAudioState(objAudioState)
+      }
+    }
+  }
+
+  const fncHandleVolumeChange = (objEvent) => {
+    const dblNewVolume = parseFloat(objEvent.target.value)
+    setDblMusicVolume(dblNewVolume)
+
+    if (objEngineRef.current) {
+      objEngineRef.current.setMusicVolume(dblNewVolume)
+    }
+
+    localStorage.setItem('musicVolume', dblNewVolume.toString())
+  }
+
+  const fncHandleCharacterSelection = (strUrl) => {
+    setStrSelectedCharacter(strUrl);
+    setBlnShowCharacterSelection(false);
+  };
+
+  if (blnShowCharacterSelection) {
+    return (
+      <div className="game-modal-backdrop">
+        <div className="game-modal">
+          <h2 className="game-over-title">Select Your Character</h2>
+          <div className="character-selection">
+            {arrCharacters.map((objCharacter) => (
+              <button
+                key={objCharacter.name}
+                type="button"
+                className="character-button"
+                onClick={() => fncHandleCharacterSelection(objCharacter.url)}
+              >
+                <img src={objCharacter.url} alt={objCharacter.name} />
+                <span>{objCharacter.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <section className="game-container" aria-live="polite">
+    <section className="game-container w-3/4" aria-live="polite">
       <div
         className="game-stage"
         ref={objCanvasContainerRef}
@@ -251,6 +387,34 @@ function GameCanvas() {
         <span className="game-score" aria-label={'Current score ' + intScore}>
           Score: {intScore}
         </span>
+        <div className="game-audio-controls">
+          <button
+            type="button"
+            className="game-audio-button"
+            onClick={fncHandleToggleMusic}
+            aria-label={objAudioState?.blnIsPlaying ? 'Pause music' : 'Play music'}
+            title={objAudioState?.blnIsPlaying ? 'Pause music' : 'Play music'}
+          >
+            {objAudioState?.blnIsPlaying ? '🔊' : '🔇'}
+          </button>
+          <div className="game-volume-control">
+            <label htmlFor="music-volume" className="game-volume-label">
+              Volume:
+            </label>
+            <input
+              id="music-volume"
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={dblMusicVolume}
+              onChange={fncHandleVolumeChange}
+              className="game-volume-slider"
+              aria-label="Music volume"
+            />
+            <span className="game-volume-value">{Math.round(dblMusicVolume * 100)}%</span>
+          </div>
+        </div>
         {blnControlsUnavailable && (
           <p className="game-warning">Keyboard controls are unavailable in this environment.</p>
         )}
