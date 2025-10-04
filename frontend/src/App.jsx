@@ -9,8 +9,6 @@ import GameCanvas from './components/GameCanvas.jsx'
 function App() {
   return (
     <main className="app-shell">
-      <h1 className="app-title">Base Event Platformer</h1>
-      <p className="app-description">Use the arrow keys or A / D to navigate between platforms.</p>
       <GameCanvas />
     </main>
   )

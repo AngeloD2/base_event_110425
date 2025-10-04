@@ -5,7 +5,9 @@
  */
 :root {
   font-family: 'Segoe UI', 'Roboto', sans-serif;
-  background-color: #0b132b;
+  background-color: #161616;
+  /* background: url('./bg.png'); */
+  background-size: cover;
   color: #f5ebe0;
   line-height: 1.5;
   font-weight: 400;

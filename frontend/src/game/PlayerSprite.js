@@ -16,9 +16,8 @@ export function createPlayerSprite(objStageContainer) {
   }
 
   const objPlayerGraphic = new Graphics()
-  objPlayerGraphic.beginFill(PLAYER_COLOR)
-  objPlayerGraphic.drawRoundedRect(0, 0, PLAYER_WIDTH, PLAYER_HEIGHT, 10)
-  objPlayerGraphic.endFill()
+  objPlayerGraphic.roundRect(0, 0, PLAYER_WIDTH, PLAYER_HEIGHT, 10)
+  objPlayerGraphic.fill(PLAYER_COLOR)
   objPlayerGraphic.x = 0
   objPlayerGraphic.y = 0
   objStageContainer.addChild(objPlayerGraphic)

@@ -4,12 +4,15 @@
  * Purpose: Host the PixiJS application, coordinate the game engine lifecycle, and expose UI overlays
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Application } from 'pixi.js'
+import { Application, Assets } from 'pixi.js'
 import { createGameEngine } from '../game/GameEngine.js'
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   BACKGROUND_COLOR,
+  BACKGROUND_IMAGE_PATH,
+  BACKGROUND_MUSIC_PATH,
+  BACKGROUND_MUSIC_VOLUME_DEFAULT,
 } from '../game/gameConstants.js'
 import useKeyboardControls from '../hooks/useKeyboardControls.js'
 
@@ -30,6 +33,8 @@ function GameCanvas() {
   const [strErrorMessage, setStrErrorMessage] = useState('')
   const [blnSaveInProgress, setBlnSaveInProgress] = useState(false)
   const [strSaveStatusMessage, setStrSaveStatusMessage] = useState('')
+  const [objAudioState, setObjAudioState] = useState(null)
+  const [dblMusicVolume, setDblMusicVolume] = useState(BACKGROUND_MUSIC_VOLUME_DEFAULT)
 
   const objControlsResult = useKeyboardControls()
 
@@ -88,6 +93,24 @@ function GameCanvas() {
 
     async function fncInitialize() {
       try {
+        // Initialize PixiJS Assets system first
+        await Assets.init({
+          basePath: '/',
+          texturePreference: {
+            format: ['png', 'webp'],
+            resolution: 1,
+          },
+        })
+
+        // Add background and audio asset bundles
+        Assets.addBundle('background', [
+          { alias: 'background', src: BACKGROUND_IMAGE_PATH }
+        ])
+
+        Assets.addBundle('audio', [
+          { alias: 'music', src: BACKGROUND_MUSIC_PATH }
+        ])
+
         const objInitializedApplication = new Application()
         await objInitializedApplication.init({
           width: CANVAS_WIDTH,
@@ -111,6 +134,27 @@ function GameCanvas() {
 
         objCanvasContainerElement.innerHTML = ''
         objCanvasContainerElement.appendChild(objInitializedApplication.canvas)
+
+        // Load background and audio assets with proper error handling
+        try {
+          await Assets.loadBundle('background')
+        } catch (objAssetError) {
+          console.warn('Background texture failed to load, using solid color background', objAssetError)
+          // Don't fail the entire initialization if background fails
+        }
+
+        try {
+          await Assets.loadBundle('audio')
+        } catch (objAudioError) {
+          console.warn('Audio file failed to load, game will proceed without background music', objAudioError)
+          // Don't fail the entire initialization if audio fails
+        }
+
+        if (blnIsCancelled) {
+          objInitializedApplication.destroy(true, { children: true })
+          objApplicationRef.current = null
+          return
+        }
 
         const objEngineResult = createGameEngine({
           objApplication: objInitializedApplication,
@@ -137,6 +181,12 @@ function GameCanvas() {
           return
         }
 
+        const objAudioState = objEngineRef.current.getAudioState()
+        if (objAudioState) {
+          setObjAudioState(objAudioState)
+          setDblMusicVolume(objAudioState.dblCurrentVolume)
+        }
+
         const objStartResult = objEngineRef.current.start()
         if (!objStartResult.success) {
           setStrErrorMessage('Unable to start the game loop.')
@@ -158,6 +208,8 @@ function GameCanvas() {
       setIntScore(0)
       setBlnSaveInProgress(false)
       setStrSaveStatusMessage('')
+      setObjAudioState(null)
+      setDblMusicVolume(BACKGROUND_MUSIC_VOLUME_DEFAULT)
 
       if (objEngineRef.current) {
         objEngineRef.current.stop()
@@ -201,6 +253,12 @@ function GameCanvas() {
       return
     }
 
+    const objAudioState = objEngineRef.current.getAudioState()
+    if (objAudioState) {
+      setObjAudioState(objAudioState)
+      setDblMusicVolume(objAudioState.dblCurrentVolume)
+    }
+
     setBlnGameOver(false)
     setStrErrorMessage('')
     setIntScore(0)
@@ -239,6 +297,31 @@ function GameCanvas() {
     }
   }
 
+  const fncHandleToggleMusic = () => {
+    if (!objEngineRef.current) {
+      return
+    }
+
+    const objToggleResult = objEngineRef.current.toggleMusic()
+    if (objToggleResult.success) {
+      const objAudioState = objEngineRef.current.getAudioState()
+      if (objAudioState) {
+        setObjAudioState(objAudioState)
+      }
+    }
+  }
+
+  const fncHandleVolumeChange = (objEvent) => {
+    const dblNewVolume = parseFloat(objEvent.target.value)
+    setDblMusicVolume(dblNewVolume)
+
+    if (objEngineRef.current) {
+      objEngineRef.current.setMusicVolume(dblNewVolume)
+    }
+
+    localStorage.setItem('musicVolume', dblNewVolume.toString())
+  }
+
   return (
     <section className="game-container" aria-live="polite">
       <div
@@ -251,6 +334,34 @@ function GameCanvas() {
         <span className="game-score" aria-label={'Current score ' + intScore}>
           Score: {intScore}
         </span>
+        <div className="game-audio-controls">
+          <button
+            type="button"
+            className="game-audio-button"
+            onClick={fncHandleToggleMusic}
+            aria-label={objAudioState?.blnIsPlaying ? 'Pause music' : 'Play music'}
+            title={objAudioState?.blnIsPlaying ? 'Pause music' : 'Play music'}
+          >
+            {objAudioState?.blnIsPlaying ? '🔊' : '🔇'}
+          </button>
+          <div className="game-volume-control">
+            <label htmlFor="music-volume" className="game-volume-label">
+              Volume:
+            </label>
+            <input
+              id="music-volume"
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={dblMusicVolume}
+              onChange={fncHandleVolumeChange}
+              className="game-volume-slider"
+              aria-label="Music volume"
+            />
+            <span className="game-volume-value">{Math.round(dblMusicVolume * 100)}%</span>
+          </div>
+        </div>
         {blnControlsUnavailable && (
           <p className="game-warning">Keyboard controls are unavailable in this environment.</p>
         )}
